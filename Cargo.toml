@@ -1,0 +1,8 @@
+[package]
+name = "pressure"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+core_affinity = "0.8.1"
+sysinfo = "0.33.0"
