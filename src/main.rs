@@ -1,116 +1,102 @@
 extern crate core_affinity;
-
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+mod core_latency;
+mod core_noise;
+mod tick_resolution;
+use raw_cpuid::CpuId;
+use std::collections::HashSet;
+use std::env;
 use std::time::Instant;
-use std::{env, thread};
-use std::thread::JoinHandle;
-use core_affinity::CoreId;
-use sysinfo::{System};
+use sysinfo::System;
 
-const RTT_COUNT: u32 = 50_000_000;
+// Constants
+const RTT_COUNT: u32 = 1_000_000;
+const DEFAULT_NOISE_TOLERANCE: u64 = 200;
+const VALID_MODE: &str = "all";
+
+const SPLIT_STRING: &str = "----------------------------------------";
 
 fn main() {
-
+    let start_time = Instant::now();
     let args: Vec<String> = env::args().collect();
-
-    if args.len() < 4 || args[1] != "cl" && args[1] != "cpulatency" {
-        eprintln!("Usage: {} cl <core1> <core2>", args[0]);
+    if let Err(msg) = validate_args(&args) {
+        eprintln!("{}", msg);
         return;
     }
 
-    let (number1, number2) = match extract_arguments(args) {
-        Some(value) => value,
-        None => return,
-    };
+    println!("Welcome to pressure measurement tool.");
+    println!("{}", SPLIT_STRING);
+    validate_machine();
+    println!("{}", SPLIT_STRING);
+    print_machine_info();
 
-    println!("Will measure latency between CPUs: {} and {}", number1, number2);
+    println!("{}", SPLIT_STRING);
+    println!("Measuring core latency...");
+    core_latency::core_latency();
+    println!("{}", SPLIT_STRING);
+    println!("Measuring tick resolution...");
+    tick_resolution::do_tick_resolution_measurement();
+    println!();
+    println!("{}", SPLIT_STRING);
+    println!("Measuring core noise...");
+    core_noise::core_noise(DEFAULT_NOISE_TOLERANCE);
+    println!("{}", SPLIT_STRING);
 
-    let (core1, core2) = match validate_and_select_cores(number1, number2) {
-        Some(value) => value,
-        None => return,
-    };
-
-    // Use Arc to safely share flag across threads
-    let flag = Arc::new(AtomicBool::new(false));
-
-    // Start timing
-    let start = Instant::now();
-
-    // First thread
-    let flag_clone1 = Arc::clone(&flag);
-    let flag_clone2 = Arc::clone(&flag);
-    let handle1 = create_round_trip_thread(core1, RTT_COUNT, flag_clone1, false);
-    let handle2 = create_round_trip_thread(core2, RTT_COUNT, flag_clone2, true);
-
-    handle1.join().unwrap();
-    handle2.join().unwrap();
-
-    let elapsed = start.elapsed();
-    let ops_time = elapsed.as_nanos() as f64 / (RTT_COUNT * 2) as f64;
-    println!("Total time for {} ping-pong operations: {:?} corresponding to: {:.1} nanos / single trip", RTT_COUNT, elapsed, ops_time);
-
-    retrieve_cpu_clock_info();
+    let end_time = Instant::now();
+    println!(
+        "Measurements took {:.3} seconds.",
+        (end_time - start_time).as_secs_f32()
+    );
 }
 
-fn retrieve_cpu_clock_info() {
-    // Create a System object
-    let mut system = System::new_all();
-    // Refresh system information, including processor statistics
-    system.refresh_all();
-
-    // Access CPU processor list
-    let processors = system.cpus();
-
-    for cpu in processors {
-        let frequency = cpu.frequency();
-        println!("Current CPU frequency: {} MHz", frequency);
+fn validate_args(args: &[String]) -> Result<(), &'static str> {
+    if args.len() < 1 || args[1] != VALID_MODE {
+        return Err("Usage: <executable> all");
     }
+    Ok(())
 }
 
-fn validate_and_select_cores(number1: usize, number2: usize) -> Option<(CoreId, CoreId)> {
-    // Get list of cores
-    let cores = core_affinity::get_core_ids().unwrap();
-    if cores.len() < number1
-        || cores.len() < number2 {
-        eprintln!("The specified CPU cores is out of range");
-        return None;
+
+fn validate_machine() {
+    println!("Validating...");
+    let cpuid = CpuId::new();
+    if let Some(feature_info) = cpuid.get_advanced_power_mgmt_info() {
+        if !feature_info.has_invariant_tsc() {
+            eprintln!("WARN: The CPU does NOT support Invariant TSC. This may cause problems.");
+        }
+    } else {
+        panic!("Unable to retrieve feature information from the CPU.");
     }
 
-    let core1 = cores[number1];
-    let core2 = cores[number2];
-    Some((core1, core2))
+    println!("Validation done");
 }
 
-fn create_round_trip_thread(core: CoreId, iterations: u32, flag_clone: Arc<AtomicBool>, start_state: bool) -> JoinHandle<()> {
-    thread::spawn(move || {
-        core_affinity::set_for_current(core);
-        for _ in 0..iterations {
-            while flag_clone.compare_exchange_weak(start_state, !start_state, Ordering::SeqCst, Ordering::SeqCst).is_err() {}
-        }
-    })
-}
+fn print_machine_info() {
+    println!("MACHINE INFORMATION");
+    let cores = core_affinity::get_core_ids().expect("Could not get core IDs.");
+    println!("System have {} cores available", cores.len());
 
-fn extract_arguments(args: Vec<String>) -> Option<(usize, usize)> {
-    let number1: usize = match args[2].parse() {
-        Ok(num) => num,
-        Err(_) => {
-            eprintln!("The core id 1 is not a valid integer.");
-            return None;
-        }
-    };
+    let mut sys = System::new_all();
+    sys.refresh_all();
 
-    let number2: usize = match args[3].parse() {
-        Ok(num) => num,
-        Err(_) => {
-            eprintln!("The core id 2 is not a valid integer.");
-            return None;
-        }
-    };
-
-    if number1 == number2 {
-        eprintln!("The cpu ids cannot be the same.");
-        return None;
+    // Find and print all unique processor brands
+    let mut unique_brands = HashSet::new();
+    for processor in sys.cpus() {
+        unique_brands.insert(processor.brand().to_string());
     }
 
-    Some((number1, number2))
+    println!("Cpu brand(s): {}",
+             unique_brands
+                 .into_iter()
+                 .collect::<Vec<_>>() // Collect into a vector to join
+                 .join(", ") // Use join for comma-separated output
+    );
+
+    println!(
+        "Total physical memory: {} MB",
+        sys.total_memory() / (1024 * 1024)
+    );
+    println!(
+        "Total swap memory: {} MB",
+        sys.total_swap() / (1024 * 1024)
+    );
 }
