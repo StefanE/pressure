@@ -2,8 +2,13 @@
 name = "pressure"
 version = "0.1.0"
 edition = "2021"
+description = "Measures CPU core-to-core latency"
+authors = ["Stefan Ettrup"]
+repository = "https://github.com/stefane/pressure"
+license = "MIT"
+readme = "README.md"
 
 [dependencies]
 core_affinity = "0.8.3"
 raw-cpuid = "11.5.0"
-sysinfo = "0.34.2"
+sysinfo = "0.35.1"
