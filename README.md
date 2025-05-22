@@ -28,7 +28,7 @@ These features are useful for benchmarking and analyzing CPU behavior, particula
 ## How to Run
 1. **Build and Run**: Use `cargo build --release` to compile the program, then run it with the provided executable.
 ```
-   ./pressure cl
+   ./pressure all
 ```
 The `all` argument is mandatory and ensures you're in the correct mode.
 1. **CPU Latency Output**: A matrix of latencies is printed with core IDs as headers. Latency values are in nanoseconds.

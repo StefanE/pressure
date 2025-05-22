@@ -49,8 +49,8 @@ fn main() {
 }
 
 fn validate_args(args: &[String]) -> Result<(), &'static str> {
-    if args.len() < 1 || args[1] != VALID_MODE {
-        return Err("Usage: <executable> all");
+    if args.len() < 2 || args[1] != VALID_MODE {
+        return Err("Usage: pressure all");
     }
     Ok(())
 }

@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -10,8 +11,11 @@ pub fn core_latency() {
     let core_ids = core_affinity::get_core_ids().expect("Failed to get core IDs");
     let mut vector: Vec<Vec<u64>> = vec![vec![0; core_ids.len()]; core_ids.len()];
 
+    print!("Measuring...");
     // Ensure all pairs of CPU cores are tried
     for (i, &core1) in core_ids.iter().enumerate() {
+        print!("CPU {}...", core1.id);
+        std::io::stdout().flush().expect("Problem flushing");
         for &core2 in &core_ids[i + 1..] {
             let mut latency_runs: Vec<u64> = vec![0;3];
             for i in 0..3 {
