@@ -2,7 +2,7 @@
 name = "pressure"
 version = "0.1.0"
 edition = "2021"
-description = "Measures CPU core-to-core latency"
+description = "Measures different timing and latency properties of system"
 authors = ["Stefan Ettrup"]
 repository = "https://github.com/stefane/pressure"
 license = "MIT"
