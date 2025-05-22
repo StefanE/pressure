@@ -1,5 +1,5 @@
 [package]
-name = "pressure"
+name = "pressure-util"
 version = "0.1.0"
 edition = "2021"
 description = "Measures different timing and latency properties of system"

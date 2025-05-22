@@ -76,7 +76,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pressure"
+name = "pressure-util"
 version = "0.1.0"
 dependencies = [
  "core_affinity",
